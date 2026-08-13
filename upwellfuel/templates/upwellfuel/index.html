@@ -1,0 +1,273 @@
+{% extends "allianceauth/base-bs5.html" %}
+{% load humanize %}
+
+{% block page_title %}Upwell Fuel{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <h1 class="mb-4">
+        <i class="fa-solid fa-gas-pump"></i> Upwell Fuel
+        <small class="text-muted fs-5">fuel planning for the next {{ period_days }} day{{ period_days|pluralize }}</small>
+    </h1>
+
+    <form method="get" class="row g-2 align-items-end mb-4">
+        <div class="col-auto">
+            <label class="form-label" for="days">Planning period</label>
+            <div class="input-group">
+                <select class="form-select" name="days" id="days" onchange="this.form.submit()">
+                    {% for choice in period_choices %}
+                        <option value="{{ choice }}" {% if choice == period_days %}selected{% endif %}>
+                            {{ choice }} days
+                        </option>
+                    {% endfor %}
+                    {% if period_days not in period_choices %}
+                        <option value="{{ period_days }}" selected>{{ period_days }} days</option>
+                    {% endif %}
+                </select>
+            </div>
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label" for="corporation">Corporation</label>
+            <select class="form-select" name="corporation" id="corporation" onchange="this.form.submit()">
+                <option value="">All corporations</option>
+                {% for corporation in corporations %}
+                    <option value="{{ corporation }}" {% if corporation == selected_corporation %}selected{% endif %}>
+                        {{ corporation }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-auto">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="shortfall" value="1"
+                       id="shortfall" {% if shortfall_only %}checked{% endif %}
+                       onchange="this.form.submit()">
+                <label class="form-check-label" for="shortfall">Only structures that fall short</label>
+            </div>
+        </div>
+
+        <div class="col-auto ms-auto">
+            <a class="btn btn-outline-secondary"
+               href="{% url 'upwellfuel:export_csv' %}?days={{ period_days }}{% if selected_corporation %}&corporation={{ selected_corporation|urlencode }}{% endif %}{% if shortfall_only %}&shortfall=1{% endif %}">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </a>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase">Structures</div>
+                    <div class="fs-3 fw-bold">{{ report.structure_count }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase">Burn over {{ period_days }}d</div>
+                    <div class="fs-3 fw-bold">{{ report.blocks_needed|floatformat:0|intcomma }}</div>
+                    <div class="text-muted small">fuel blocks consumed</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase">Still to buy</div>
+                    <div class="fs-3 fw-bold text-primary">{{ report.blocks_to_buy|floatformat:0|intcomma }}</div>
+                    <div class="text-muted small">
+                        {{ report.volume_to_buy|floatformat:0|intcomma }} m&sup3; to haul
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase">Estimated cost</div>
+                    {% if report.has_prices %}
+                        <div class="fs-3 fw-bold">{{ report.isk_to_buy|floatformat:0|intcomma }}</div>
+                        <div class="text-muted small">ISK at average price</div>
+                    {% else %}
+                        <div class="fs-3 fw-bold text-muted">&mdash;</div>
+                        <div class="text-muted small">no market prices loaded</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not report.has_prices %}
+        <div class="alert alert-secondary">
+            <i class="fa-solid fa-circle-info"></i>
+            ISK estimates need market prices, which nothing is currently loading.
+            Schedule <code>eveuniverse.tasks.update_market_prices</code> in
+            <code>CELERYBEAT_SCHEDULE</code> and the cost column fills in on the next run.
+        </div>
+    {% endif %}
+
+    {% if report.modelled_count or report.unknown_count %}
+        <div class="alert alert-warning">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            {% if report.modelled_count %}
+                {{ report.modelled_count }} structure{{ report.modelled_count|pluralize }} could not
+                report a measured burn rate, so the figure is estimated from the service modules
+                fitted. Estimates are marked in the table.
+            {% endif %}
+            {% if report.unknown_count %}
+                {{ report.unknown_count }} structure{{ report.unknown_count|pluralize }} has no usable
+                fuel data at all and contributes nothing to the totals.
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if report.by_corporation|length > 1 %}
+        <div class="card mb-4">
+            <div class="card-header"><strong>By corporation</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Corporation</th>
+                            <th class="text-end">Structures</th>
+                            <th class="text-end">Burn over {{ period_days }}d</th>
+                            <th class="text-end">To buy</th>
+                            {% if report.has_prices %}<th class="text-end">ISK</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for total in report.by_corporation %}
+                            <tr>
+                                <td>{{ total.corporation }}</td>
+                                <td class="text-end">{{ total.structures }}</td>
+                                <td class="text-end">{{ total.blocks_needed|floatformat:0|intcomma }}</td>
+                                <td class="text-end fw-bold">{{ total.blocks_to_buy|floatformat:0|intcomma }}</td>
+                                {% if report.has_prices %}
+                                    <td class="text-end">{{ total.isk_to_buy|floatformat:0|intcomma }}</td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header"><strong>Structures</strong> <span class="text-muted">soonest to run dry first</span></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Structure</th>
+                        <th>Location</th>
+                        <th>Services online</th>
+                        <th class="text-end">Blocks/day</th>
+                        <th class="text-end">Fuel left</th>
+                        <th class="text-end">Burn over {{ period_days }}d</th>
+                        <th class="text-end">To buy</th>
+                        {% if report.has_prices %}<th class="text-end">ISK</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report.rows %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ row.name }}</div>
+                                <div class="text-muted small">
+                                    {{ row.type_name }} &middot; {{ row.corporation }}
+                                    {% if row.power_mode != "Full Power" %}
+                                        <span class="badge bg-secondary">{{ row.power_mode }}</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {{ row.solar_system }}
+                                <div class="text-muted small">{{ row.region }}</div>
+                            </td>
+                            <td>
+                                {% for service in row.services %}
+                                    <span class="badge bg-light text-dark border">{{ service }}</span>
+                                {% empty %}
+                                    <span class="text-muted small">none online</span>
+                                {% endfor %}
+                                {% if row.gas %}
+                                    <div class="small mt-1">
+                                        <i class="fa-solid fa-fire"></i>
+                                        gas: {{ row.gas.blocks_remaining|floatformat:0|intcomma }} on hand,
+                                        buy {{ row.gas.blocks_to_buy|floatformat:0|intcomma }}
+                                        <span class="text-muted">(estimated)</span>
+                                    </div>
+                                {% endif %}
+                                {% if row.ozone_on_hand is not None %}
+                                    <div class="small mt-1 text-muted">
+                                        <i class="fa-solid fa-droplet"></i>
+                                        ozone in bay: {{ row.ozone_on_hand|intcomma }}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if row.blocks_per_day %}
+                                    {{ row.blocks_per_day|floatformat:0 }}
+                                    {% if not row.is_measured %}
+                                        <div class="text-muted small">estimated</div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">unknown</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if row.days_remaining is not None %}
+                                    <span class="{% if row.days_remaining < 7 %}text-danger fw-bold{% elif row.days_remaining < 14 %}text-warning fw-semibold{% endif %}">
+                                        {{ row.days_remaining|floatformat:1 }} d
+                                    </span>
+                                    <div class="text-muted small">
+                                        {{ row.projection.blocks_remaining|floatformat:0|intcomma }} blocks
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ row.projection.blocks_needed|floatformat:0|intcomma }}</td>
+                            <td class="text-end fw-bold">
+                                {% if row.projection.is_covered %}
+                                    <span class="text-success">covered</span>
+                                {% else %}
+                                    {{ row.projection.blocks_to_buy|floatformat:0|intcomma }}
+                                {% endif %}
+                            </td>
+                            {% if report.has_prices %}
+                                <td class="text-end">
+                                    {% if row.isk_to_buy %}{{ row.isk_to_buy|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No structures to show. If that is unexpected, your account may be missing
+                                one of the aa-structures viewing permissions
+                                (<code>view_corporation_structures</code>, <code>view_alliance_structures</code>
+                                or <code>view_all_structures</code>).
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        Burn rates are measured from each structure's own fuel bay and expiry date, so they already
+        include every hull and rig bonus. Magmatic gas figures use an assumed
+        {{ gas_rate|floatformat:0 }} units/hour per Metenox drill and are estimates. Liquid ozone is
+        shown as stock only, since jump bridges burn it per jump rather than per hour.
+    </p>
+
+</div>
+{% endblock %}

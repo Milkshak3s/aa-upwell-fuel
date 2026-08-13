@@ -1,0 +1,61 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "aa-upwell-fuel"
+dynamic = ["version", "description"]
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10,<3.14"
+authors = [
+    {name = "Milkshak3s", email = "milkshak3s@pm.me"},
+]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dependencies = [
+    "allianceauth>=4.6.0",
+    "aa-structures>=2.0.0",
+    "django-eveuniverse>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "coverage>=7.0.0",
+    "flake8>=7.0.0",
+    "isort>=5.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Milkshak3s/aa-upwell-fuel"
+Source = "https://github.com/Milkshak3s/aa-upwell-fuel"
+Tracker = "https://github.com/Milkshak3s/aa-upwell-fuel/issues"
+
+[tool.flit.module]
+name = "upwellfuel"
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "DJANGO", "ALLIANCEAUTH", "FIRSTPARTY", "LOCALFOLDER"]
+known_allianceauth = ["allianceauth", "app_utils"]
+known_django = ["django", "esi", "eveuniverse", "structures"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
