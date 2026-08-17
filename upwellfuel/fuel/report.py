@@ -8,7 +8,7 @@ drift out of step with it.
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from django.utils.timezone import now
 
@@ -117,6 +117,79 @@ class Report:
     @property
     def structure_count(self) -> int:
         return len(self.rows)
+
+
+@dataclass(frozen=True)
+class SortField:
+    """One column the structures table can be ordered by.
+
+    ``descending_by_default`` is what a first click on the header does. The
+    useful first look at a column differs by column: the biggest buy order
+    matters most, but the structure that runs dry soonest is the one with the
+    least time left, so those two want opposite directions.
+    """
+
+    key: str
+    label: str
+    value: Callable[["StructureRow"], object]
+    descending_by_default: bool = False
+
+
+SORT_FIELDS = {
+    field.key: field
+    for field in [
+        SortField("name", "Structure", lambda row: row.name.lower()),
+        SortField(
+            "location",
+            "Location",
+            lambda row: (row.region.lower(), row.solar_system.lower()),
+        ),
+        SortField("services", "Services online", lambda row: len(row.services), True),
+        SortField("rate", "Blocks/day", lambda row: row.blocks_per_day, True),
+        SortField("remaining", "Fuel left", lambda row: row.days_remaining),
+        SortField("needed", "Burn", lambda row: row.projection.blocks_needed, True),
+        SortField("buy", "To buy", lambda row: row.projection.blocks_to_buy, True),
+        SortField("isk", "ISK", lambda row: row.isk_to_buy, True),
+    ]
+}
+
+DEFAULT_SORT_KEY = "remaining"
+
+
+def resolve_sort(sort_key: str = "", direction: str = "") -> tuple:
+    """Turn query-string values into a column and a direction.
+
+    Anything unrecognised falls back to the default column and that column's
+    own preferred direction, so a hand-edited URL can never produce an empty or
+    arbitrarily ordered table.
+    """
+    key = sort_key if sort_key in SORT_FIELDS else DEFAULT_SORT_KEY
+    if direction == "asc":
+        return key, False
+    if direction == "desc":
+        return key, True
+    return key, SORT_FIELDS[key].descending_by_default
+
+
+def sort_rows(rows: List["StructureRow"], sort_key: str = "", descending: bool = None):
+    """Order rows by one column, keeping rows with no value for it last.
+
+    A structure with no measured or modelled burn rate has no number in most
+    columns. Those rows sort to the bottom in both directions rather than
+    flooding the top of a descending sort, since "unknown" is not an extreme
+    value, it is an absent one.
+    """
+    field = SORT_FIELDS.get(sort_key) or SORT_FIELDS[DEFAULT_SORT_KEY]
+    if descending is None:
+        descending = field.descending_by_default
+
+    # Name order first, so the sort below (which is stable) breaks ties by name
+    # in the same direction no matter which way the chosen column is running.
+    by_name = sorted(rows, key=lambda row: row.name.lower())
+    valued = [row for row in by_name if field.value(row) is not None]
+    unvalued = [row for row in by_name if field.value(row) is None]
+    valued.sort(key=field.value, reverse=descending)
+    return valued + unvalued
 
 
 def _market_prices() -> dict:
@@ -300,7 +373,7 @@ def build_report(structures, period_days: int, magmatic_gas_per_hour: float) -> 
     report.by_corporation = sorted(
         totals.values(), key=lambda total: total.blocks_to_buy, reverse=True
     )
-    report.rows.sort(key=lambda row: (row.days_remaining is None, row.days_remaining or 0))
+    report.rows = sort_rows(report.rows)
     return report
 
 

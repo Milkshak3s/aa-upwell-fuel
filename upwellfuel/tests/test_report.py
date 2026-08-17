@@ -13,7 +13,7 @@ from django.utils.timezone import now
 
 from upwellfuel.fuel import report as report_module
 from upwellfuel.fuel.calc import RATE_SOURCE_MEASURED, RATE_SOURCE_MODELLED, RATE_SOURCE_UNKNOWN
-from upwellfuel.fuel.report import build_report
+from upwellfuel.fuel.report import build_report, resolve_sort, sort_rows
 
 ASTRAHUS = (35832, 1657, "Astrahus")
 METENOX = (81826, 4744, "Metenox Moon Drill")
@@ -226,3 +226,66 @@ class BuildReportTest(TestCase):
         row = report.rows[0]
         self.assertTrue(report.has_prices)
         self.assertAlmostEqual(row.isk_to_buy, row.projection.blocks_to_buy * 20.0)
+
+
+class SortRowsTest(TestCase):
+    """Ordering the finished table by any of its columns."""
+
+    def setUp(self):
+        patcher = patch.object(report_module, "_market_prices", return_value={})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _rows(self):
+        """Three structures that order differently in different columns."""
+        thirsty = _fuelled_citadel(blocks=200)
+        thirsty.name = "Zulu"
+        comfortable = _fuelled_citadel(blocks=20_000)
+        comfortable.name = "Alpha"
+        unknown = _Structure(ASTRAHUS, name="Mike", fuel_expires_at=None)
+        report = build_report(
+            [comfortable, thirsty, unknown], period_days=30, magmatic_gas_per_hour=55
+        )
+        return report.rows
+
+    def _names(self, sort_key="", descending=None):
+        return [
+            row.name for row in sort_rows(self._rows(), sort_key, descending)
+        ]
+
+    def test_the_default_is_still_soonest_to_run_dry(self):
+        self.assertEqual(self._names(), ["Zulu", "Alpha", "Mike"])
+
+    def test_sorting_by_name(self):
+        self.assertEqual(self._names("name"), ["Alpha", "Mike", "Zulu"])
+        self.assertEqual(self._names("name", descending=True), ["Zulu", "Mike", "Alpha"])
+
+    def test_a_buy_column_starts_at_the_biggest_order(self):
+        """First click on 'to buy' should show the largest shortfall, not zero."""
+        names = self._names("buy")
+        self.assertEqual(names[0], "Zulu")
+
+    def test_direction_can_be_forced_against_the_column_default(self):
+        self.assertEqual(self._names("buy", descending=False)[0], "Alpha")
+
+    def test_structures_with_no_value_stay_at_the_bottom_either_way(self):
+        """'Unknown' is an absent value, not an extreme one."""
+        self.assertEqual(self._names("remaining")[-1], "Mike")
+        self.assertEqual(self._names("remaining", descending=True)[-1], "Mike")
+
+    def test_an_unknown_column_falls_back_to_the_default(self):
+        self.assertEqual(self._names("nonsense"), self._names())
+
+
+class ResolveSortTest(TestCase):
+    def test_a_bare_column_uses_that_column_s_own_preferred_direction(self):
+        self.assertEqual(resolve_sort("buy"), ("buy", True))
+        self.assertEqual(resolve_sort("name"), ("name", False))
+
+    def test_an_explicit_direction_wins(self):
+        self.assertEqual(resolve_sort("buy", "asc"), ("buy", False))
+        self.assertEqual(resolve_sort("name", "desc"), ("name", True))
+
+    def test_junk_is_answered_with_the_default_column(self):
+        self.assertEqual(resolve_sort("", ""), ("remaining", False))
+        self.assertEqual(resolve_sort("' OR 1=1", "sideways"), ("remaining", False))

@@ -68,6 +68,34 @@ class ViewAccessTest(TestCase):
         response = self.client.get(reverse("upwellfuel:index"), {"days": 99999})
         self.assertEqual(response.context["period_days"], 365)
 
+    def test_sort_column_comes_from_the_query_string(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("upwellfuel:index"), {"sort": "buy"})
+        self.assertEqual(response.context["sort_key"], "buy")
+        self.assertTrue(response.context["sort_descending"])
+
+    def test_sort_direction_can_be_reversed(self):
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("upwellfuel:index"), {"sort": "buy", "dir": "asc"}
+        )
+        self.assertFalse(response.context["sort_descending"])
+
+    def test_an_unknown_sort_column_falls_back_to_the_default(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("upwellfuel:index"), {"sort": "nonsense"})
+        self.assertEqual(response.context["sort_key"], "remaining")
+
+    def test_column_headings_link_to_a_sort_that_keeps_the_other_filters(self):
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("upwellfuel:index"), {"days": 7, "shortfall": 1}
+        )
+        body = response.content.decode()
+        self.assertIn("sort=buy", body)
+        self.assertIn("days=7", body)
+        self.assertIn("shortfall=1", body)
+
     def test_csv_export_is_served_as_a_download(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("upwellfuel:export_csv"), {"days": 14})

@@ -11,7 +11,8 @@ sits next to it.
 
 ## What it shows
 
-* Every Upwell structure you can see, soonest to run dry first
+* Every Upwell structure you can see, soonest to run dry first, or ordered by
+  any other column you click
 * The burn rate each structure is actually running at, in blocks per day
 * Fuel blocks consumed over the planning period (default 30 days)
 * What still has to be delivered, after the fuel already in the bay

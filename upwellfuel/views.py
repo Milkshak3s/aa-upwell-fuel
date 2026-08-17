@@ -16,7 +16,7 @@ from .app_settings import (
     UPWELLFUEL_MAX_PERIOD_DAYS,
     UPWELLFUEL_PERIOD_CHOICES,
 )
-from .fuel.report import build_report
+from .fuel.report import SORT_FIELDS, build_report, resolve_sort, sort_rows
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,11 @@ def _apply_filters(report, request):
 
 
 def _build(request):
+    """The report as this request asked for it: filtered, then ordered.
+
+    Sorting happens here rather than in the view so the CSV export hands over
+    the rows in the same order the page was showing them.
+    """
     days = _period_days(request)
     report = build_report(
         _visible_structures(request.user),
@@ -71,14 +76,20 @@ def _build(request):
         magmatic_gas_per_hour=UPWELLFUEL_MAGMATIC_GAS_PER_HOUR,
     )
     corporations = sorted({row.corporation for row in report.rows})
-    return _apply_filters(report, request), days, corporations
+    report = _apply_filters(report, request)
+
+    sort_key, descending = resolve_sort(
+        request.GET.get("sort", ""), request.GET.get("dir", "")
+    )
+    report.rows = sort_rows(report.rows, sort_key, descending)
+    return report, days, corporations, sort_key, descending
 
 
 @login_required
 @permission_required("structures.basic_access")
 def index(request):
     """Fuel requirements for every visible structure over a planning period."""
-    report, days, corporations = _build(request)
+    report, days, corporations, sort_key, descending = _build(request)
 
     context = {
         "report": report,
@@ -88,6 +99,10 @@ def index(request):
         "selected_corporation": request.GET.get("corporation", ""),
         "shortfall_only": bool(request.GET.get("shortfall")),
         "gas_rate": UPWELLFUEL_MAGMATIC_GAS_PER_HOUR,
+        "sort_key": sort_key,
+        "sort_descending": descending,
+        "sort_label": SORT_FIELDS[sort_key].label,
+        "burn_label": f"Burn over {days}d",
     }
     return render(request, "upwellfuel/index.html", context)
 
@@ -96,7 +111,7 @@ def index(request):
 @permission_required("structures.basic_access")
 def export_csv(request):
     """The same table as a CSV, for handing to whoever runs the buy order."""
-    report, days, _ = _build(request)
+    report, days, *_ = _build(request)
 
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = (

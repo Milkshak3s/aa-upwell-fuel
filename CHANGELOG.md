@@ -16,4 +16,6 @@ Initial release.
 * Volume and ISK costing, the latter using eveuniverse market prices when loaded
 * Magmatic gas projection for Metenox drills and liquid ozone stock for Ansiblexes
 * Corporation and shortfall filters, and CSV export
+* Sortable columns: click any heading to reorder the table, with the sort
+  carried into the CSV export
 * Reuses aa-structures' permissions; adds no models or migrations

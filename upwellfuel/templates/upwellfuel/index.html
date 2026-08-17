@@ -1,5 +1,6 @@
 {% extends "allianceauth/base-bs5.html" %}
 {% load humanize %}
+{% load upwellfuel %}
 
 {% block page_title %}Upwell Fuel{% endblock %}
 
@@ -12,6 +13,10 @@
     </h1>
 
     <form method="get" class="row g-2 align-items-end mb-4">
+        {# Changing a filter should not throw away the column the user sorted by. #}
+        <input type="hidden" name="sort" value="{{ sort_key }}">
+        <input type="hidden" name="dir" value="{% if sort_descending %}desc{% else %}asc{% endif %}">
+
         <div class="col-auto">
             <label class="form-label" for="days">Planning period</label>
             <div class="input-group">
@@ -51,7 +56,7 @@
 
         <div class="col-auto ms-auto">
             <a class="btn btn-outline-secondary"
-               href="{% url 'upwellfuel:export_csv' %}?days={{ period_days }}{% if selected_corporation %}&corporation={{ selected_corporation|urlencode }}{% endif %}{% if shortfall_only %}&shortfall=1{% endif %}">
+               href="{% url 'upwellfuel:export_csv' %}?days={{ period_days }}{% if selected_corporation %}&corporation={{ selected_corporation|urlencode }}{% endif %}{% if shortfall_only %}&shortfall=1{% endif %}&{% sort_query %}">
                 <i class="fa-solid fa-file-csv"></i> Export CSV
             </a>
         </div>
@@ -159,19 +164,25 @@
     {% endif %}
 
     <div class="card">
-        <div class="card-header"><strong>Structures</strong> <span class="text-muted">soonest to run dry first</span></div>
+        <div class="card-header">
+            <strong>Structures</strong>
+            <span class="text-muted">
+                sorted by {{ sort_label|lower }}, {% if sort_descending %}descending{% else %}ascending{% endif %}
+                &middot; click any column heading to reorder
+            </span>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Structure</th>
-                        <th>Location</th>
-                        <th>Services online</th>
-                        <th class="text-end">Blocks/day</th>
-                        <th class="text-end">Fuel left</th>
-                        <th class="text-end">Burn over {{ period_days }}d</th>
-                        <th class="text-end">To buy</th>
-                        {% if report.has_prices %}<th class="text-end">ISK</th>{% endif %}
+                        <th>{% sort_header "name" %}</th>
+                        <th>{% sort_header "location" %}</th>
+                        <th>{% sort_header "services" %}</th>
+                        <th class="text-end">{% sort_header "rate" %}</th>
+                        <th class="text-end">{% sort_header "remaining" %}</th>
+                        <th class="text-end">{% sort_header "needed" burn_label %}</th>
+                        <th class="text-end">{% sort_header "buy" %}</th>
+                        {% if report.has_prices %}<th class="text-end">{% sort_header "isk" %}</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
