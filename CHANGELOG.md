@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here.
 
-## [0.1.0] - Unreleased
+## [0.1.1] - 2026-08-17
+
+* Sortable columns: click any heading to reorder the table, with the sort
+  carried into the CSV export
+
+## [0.1.0] - 2026-08-12
 
 Initial release.
 
@@ -16,6 +21,4 @@ Initial release.
 * Volume and ISK costing, the latter using eveuniverse market prices when loaded
 * Magmatic gas projection for Metenox drills and liquid ozone stock for Ansiblexes
 * Corporation and shortfall filters, and CSV export
-* Sortable columns: click any heading to reorder the table, with the sort
-  carried into the CSV export
 * Reuses aa-structures' permissions; adds no models or migrations

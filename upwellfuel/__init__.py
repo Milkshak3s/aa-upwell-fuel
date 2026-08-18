@@ -6,6 +6,6 @@ maintained by aa-structures and projects how much fuel each structure needs
 over a planning period.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __title__ = "Upwell Fuel"
 __description__ = "Alliance Auth plugin projecting Upwell structure fuel needs for a planning period"
